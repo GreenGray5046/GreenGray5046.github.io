@@ -18,6 +18,7 @@ h1 { text-align: center; margin-bottom: 20px; font-size: 2rem; text-decoration: 
 .cipher-char-container { display:flex; flex-direction:column; align-items:center; margin:0 3px; }
 .cipher-char { width:36px; text-align:center; font-size:1.6rem; letter-spacing:2px; }
 .cipher-input { width:36px; text-align:center; border:1px solid #000; font-size:1.2rem; height:32px; text-transform:uppercase; }
+.cipher-input.active { border-color: #ff0000; background-color: #fff8f8; }
 .space-block { width:20px; margin:0 3px; }
 .controls { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:12px 0 14px 0; }
 button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:pointer; font-weight:bold; }
@@ -25,6 +26,7 @@ button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:po
 .solution-container { background:#f8f8f8; padding:12px; margin-top:16px; display:none; border:1px solid #000; }
 .solution-text { font-size:1.2rem; text-align:center; }
 .author { text-align:right; font-style:italic; margin-top:8px; font-size:1rem; }
+.instructions { margin-top: 16px; padding: 12px; background: #f8f8f8; border: 1px solid #000; font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -41,7 +43,12 @@ button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:po
         <div class="cipher-row" id="cipher-letters"></div>
         <div class="controls">
             <button id="new-quote-btn">New Quote</button>
+            <button id="clear-btn">Clear All</button>
         </div>
+    </div>
+
+    <div class="instructions">
+        <p><strong>Navigation:</strong> Use Tab/Shift+Tab to move between inputs, or click directly on any input box. Arrow keys also work for navigation.</p>
     </div>
 
     <div class="frequency-chart-container">
@@ -120,7 +127,18 @@ var WikiquoteApi = (function() {
             wqa.getSectionsForPage(pageId, function(sections){
                 var sec = sections.sections[Math.floor(Math.random()*sections.sections.length)];
                 wqa.getQuotesForSection(pageId, sec, function(res){
-                    var q = res.quotes[Math.floor(Math.random()*res.quotes.length)];
+                    // Filter quotes by length (max 200 characters)
+                    var validQuotes = res.quotes.filter(q => {
+                        var clean = q.toUpperCase().replace(/[^A-Z ]/g,'');
+                        return clean.length <= 200 && clean.length > 20;
+                    });
+                    
+                    if (validQuotes.length === 0) {
+                        error("No suitable quotes found");
+                        return;
+                    }
+                    
+                    var q = validQuotes[Math.floor(Math.random()*validQuotes.length)];
                     success({titles:res.titles, quote:q});
                 }, error);
             }, error);
@@ -133,7 +151,20 @@ var WikiquoteApi = (function() {
 
 <script>
 // ===== Game state =====
-const game = { score:0, time:0, timer:null, solution:"", author:"", cipherText:"", cipherAlphabet:"", mapping:{}, chart:null };
+const game = { 
+    score:0, 
+    time:0, 
+    timer:null, 
+    solution:"", 
+    author:"", 
+    cipherText:"", 
+    cipherAlphabet:"", 
+    mapping:{}, 
+    chart:null,
+    currentInputIndex: 0,
+    inputs: []
+};
+
 const lettersDiv=document.getElementById("cipher-letters");
 const scoreValue=document.getElementById("score-value");
 const timerValue=document.getElementById("timer-value");
@@ -144,7 +175,33 @@ const authorText=document.getElementById("author");
 // ===== Chart =====
 function initChart(){
     game.chart=new Chart(document.getElementById("frequency-chart"), {
-        type:"bar", data:{labels:[], datasets:[{data:[]}]}, options:{responsive:true, maintainAspectRatio:false}
+        type:"bar", 
+        data:{
+            labels:[], 
+            datasets:[{
+                data:[], 
+                backgroundColor: '#4a4a4a',
+                borderColor: '#000000',
+                borderWidth: 1
+            }]
+        }, 
+        options:{
+            responsive:true, 
+            maintainAspectRatio:false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
     });
 }
 function updateChart(){
@@ -169,28 +226,105 @@ function generateCipher(){
 
 function renderCipher(){
     lettersDiv.innerHTML="";
+    game.inputs = [];
+    
     [...game.cipherText].forEach((ch,i)=>{
-        if(ch===" "){ lettersDiv.innerHTML+="<div class='space-block'></div>"; return; }
+        if(ch===" "){ 
+            lettersDiv.innerHTML+="<div class='space-block'></div>"; 
+            return; 
+        }
+        
         const container=document.createElement("div");
         container.className="cipher-char-container";
+        
         const letterDiv=document.createElement("div");
-        letterDiv.className="cipher-char"; letterDiv.textContent=ch;
+        letterDiv.className="cipher-char"; 
+        letterDiv.textContent=ch;
+        
         const input=document.createElement("input");
-        input.className="cipher-input"; input.maxLength=1; input.dataset.i=i;
+        input.className="cipher-input"; 
+        input.maxLength=1; 
+        input.dataset.i=i;
+        input.dataset.cipherChar=ch;
+        
         input.addEventListener("input", handleInput);
-        container.appendChild(letterDiv); container.appendChild(input);
+        input.addEventListener("focus", handleFocus);
+        input.addEventListener("keydown", handleKeydown);
+        
+        container.appendChild(letterDiv); 
+        container.appendChild(input);
         lettersDiv.appendChild(container);
+        
+        game.inputs.push(input);
     });
+    
+    // Set focus to first input
+    if (game.inputs.length > 0) {
+        game.currentInputIndex = 0;
+        game.inputs[0].focus();
+    }
+    
     updateChart();
+}
+
+function handleFocus(e) {
+    // Update current input index
+    const index = game.inputs.indexOf(e.target);
+    if (index !== -1) {
+        game.currentInputIndex = index;
+    }
+    
+    // Update active state for all inputs
+    game.inputs.forEach(input => input.classList.remove('active'));
+    e.target.classList.add('active');
+}
+
+function handleKeydown(e) {
+    const key = e.key;
+    const input = e.target;
+    
+    // Handle arrow key navigation
+    if (key === 'ArrowRight' || key === 'ArrowDown') {
+        e.preventDefault();
+        moveToNextInput();
+    } else if (key === 'ArrowLeft' || key === 'ArrowUp') {
+        e.preventDefault();
+        moveToPrevInput();
+    } else if (key === 'Backspace' && input.value === '') {
+        e.preventDefault();
+        moveToPrevInput();
+    }
+}
+
+function moveToNextInput() {
+    if (game.currentInputIndex < game.inputs.length - 1) {
+        game.currentInputIndex++;
+        game.inputs[game.currentInputIndex].focus();
+    }
+}
+
+function moveToPrevInput() {
+    if (game.currentInputIndex > 0) {
+        game.currentInputIndex--;
+        game.inputs[game.currentInputIndex].focus();
+    }
 }
 
 function handleInput(e){
     const box=e.target, i=parseInt(box.dataset.i), cipherLetter=game.cipherText[i];
     const val=box.value.toUpperCase().replace(/[^A-Z]/g,'');
     game.mapping[cipherLetter]=val;
+    
+    // Update all inputs for this cipher letter
     document.querySelectorAll(".cipher-input").forEach(b=>{
         if(game.cipherText[b.dataset.i]==cipherLetter) b.value=val;
     });
+    
+    // Auto-advance to next input
+    if (val !== '' && game.currentInputIndex < game.inputs.length - 1) {
+        moveToNextInput();
+    }
+    
     checkSolved();
 }
 
@@ -213,6 +347,17 @@ function resetTimer(){
 }
 function formatTime(t){return `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`;}
 
+function clearAllInputs() {
+    game.inputs.forEach(input => {
+        input.value = '';
+    });
+    game.mapping = {};
+    game.currentInputIndex = 0;
+    if (game.inputs.length > 0) {
+        game.inputs[0].focus();
+    }
+}
+
 // ===== Quote fetch =====
 function loadNewQuote(){
     const authors=["Socrates","Mahatma Gandhi","Albert Einstein","Aristotle","Confucius"];
@@ -228,9 +373,11 @@ function loadNewQuote(){
         // fallback
         const fallbackQuotes=[
             "THE ONLY TRUE WISDOM IS IN KNOWING YOU KNOW NOTHING",
-            "BE THE CHANGE THAT YOU WISH TO SEE IN THE WORLD"
+            "BE THE CHANGE THAT YOU WISH TO SEE IN THE WORLD",
+            "LIFE IS WHAT HAPPENS WHEN YOU ARE BUSY MAKING OTHER PLANS",
+            "THE WAY TO GET STARTED IS TO QUIT TALKING AND BEGIN DOING"
         ];
-        const fallbackAuthors=["SOCRATES","MAHATMA GANDHI"];
+        const fallbackAuthors=["SOCRATES","MAHATMA GANDHI", "JOHN LENNON", "WALT DISNEY"];
         const i=Math.floor(Math.random()*fallbackQuotes.length);
         game.solution=fallbackQuotes[i]; game.author=fallbackAuthors[i];
         generateCipher(); renderCipher(); resetTimer(); solutionContainer.style.display="none";
@@ -243,7 +390,15 @@ window.onload=()=>{
     loadNewQuote();
 };
 document.getElementById("new-quote-btn").onclick=loadNewQuote;
+document.getElementById("clear-btn").onclick=clearAllInputs;
 
+// Add keyboard event listener for global navigation
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+        // Let the browser handle Tab navigation naturally
+        // We'll update the currentInputIndex in the focus handler
+    }
+});
 </script>
 </body>
 </html>
