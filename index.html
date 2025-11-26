@@ -47,10 +47,6 @@ button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:po
         </div>
     </div>
 
-    <div class="instructions">
-        <p><strong>Navigation:</strong> Use Arrow Keys to move between inputs. Auto-advance after entering a letter, auto-return after deleting.</p>
-    </div>
-
     <div class="frequency-chart-container">
         <canvas id="frequency-chart"></canvas>
     </div>
@@ -267,41 +263,30 @@ function renderCipher(){
     updateChart();
 }
 
-function handleFocus(e) {
-    // Update current input index
-    const index = game.inputs.indexOf(e.target);
-    if (index !== -1) {
-        game.currentInputIndex = index;
-    }
     
-    // Update active state for all inputs
-    game.inputs.forEach(input => input.classList.remove('active'));
+// ===== Input & navigation =====
+function handleFocus(e) {
+    const index = game.inputs.indexOf(e.target);
+    if(index!==-1) game.currentInputIndex = index;
+    game.inputs.forEach(input=>input.classList.remove('active'));
     e.target.classList.add('active');
 }
 
 function handleKeydown(e) {
     const key = e.key;
     const input = e.target;
-    
-    // Handle arrow key navigation
-    if (key === 'ArrowRight' || key === 'ArrowDown') {
-        e.preventDefault();
-        moveToNextInput();
-    } else if (key === 'ArrowLeft' || key === 'ArrowUp') {
+
+    if(key==='ArrowRight' || key==='ArrowDown') { e.preventDefault(); moveToNextInput(); }
+    else if(key==='ArrowLeft' || key==='ArrowUp') { e.preventDefault(); moveToPrevInput(); }
+    else if(key==='Backspace' && input.value==='') {
         e.preventDefault();
         moveToPrevInput();
-    } else if (key === 'Backspace' && input.value === '') {
-        e.preventDefault();
-        // Auto-return after deleting
-        moveToPrevInput();
-        // Clear the previous input
-        if (game.currentInputIndex >= 0) {
+        if(game.currentInputIndex>=0) {
             const prevInput = game.inputs[game.currentInputIndex];
             const cipherLetter = prevInput.dataset.cipherChar;
             game.mapping[cipherLetter] = "";
             prevInput.value = "";
-            
-            // Update all inputs for this cipher letter
+            // Clear all matching boxes
             document.querySelectorAll(".cipher-input").forEach(b=>{
                 if(game.cipherText[b.dataset.i]==cipherLetter) b.value="";
             });
@@ -310,34 +295,34 @@ function handleKeydown(e) {
 }
 
 function moveToNextInput() {
-    if (game.currentInputIndex < game.inputs.length - 1) {
+    if(game.currentInputIndex<game.inputs.length-1) {
         game.currentInputIndex++;
         game.inputs[game.currentInputIndex].focus();
     }
 }
 
 function moveToPrevInput() {
-    if (game.currentInputIndex > 0) {
+    if(game.currentInputIndex>0) {
         game.currentInputIndex--;
         game.inputs[game.currentInputIndex].focus();
     }
 }
 
-function handleInput(e){
-    const box=e.target, i=parseInt(box.dataset.i), cipherLetter=game.cipherText[i];
-    const val=box.value.toUpperCase().replace(/[^A-Z]/g,'');
-    game.mapping[cipherLetter]=val;
-    
-    // Update all inputs for this cipher letter
+function handleInput(e) {
+    const box = e.target;
+    const i = parseInt(box.dataset.i);
+    const cipherLetter = box.dataset.cipherChar;
+    const val = box.value.toUpperCase().replace(/[^A-Z]/g,'');
+    game.mapping[cipherLetter] = val;
+
+    // Replace value in all matching boxes
     document.querySelectorAll(".cipher-input").forEach(b=>{
-        if(game.cipherText[b.dataset.i]==cipherLetter) b.value=val;
+        if(game.cipherText[b.dataset.i]==cipherLetter) b.value = val;
     });
-    
-    // Auto-advance to next input after filling
-    if (val !== '' && game.currentInputIndex < game.inputs.length - 1) {
-        moveToNextInput();
-    }
-    
+
+    // Auto-advance
+    if(val!=='' && game.currentInputIndex<game.inputs.length-1) moveToNextInput();
+
     checkSolved();
 }
 
