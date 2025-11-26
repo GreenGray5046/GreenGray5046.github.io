@@ -1,34 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Aristocrat Cipher Game</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Times New Roman', Times, serif; }
-    body { background: #ffffff; color: #000000; min-height: 100vh; padding: 20px; display: flex; justify-content: center; }
-    .container { max-width: 1000px; width: 100%; background: #ffffff; padding: 25px; border: 2px solid #000; }
-    h1 { text-align: center; margin-bottom: 20px; font-size: 2rem; text-decoration: underline; }
-    .game-info { display:flex; justify-content:space-between; margin-bottom:16px; gap:8px; flex-wrap:wrap; }
-    .score, .timer { background:#f0f0f0; padding:10px 14px; font-weight:bold; border:1px solid #000; }
-    .cipher-container { background:#f8f8f8; padding:18px; border:1px solid #000; }
-    .cipher-row { display:flex; flex-wrap:wrap; justify-content:center; margin-bottom:8px; }
-    .cipher-char-container { display:flex; flex-direction:column; align-items:center; margin:0 3px; }
-    .cipher-char { width:36px; text-align:center; font-size:1.6rem; letter-spacing:2px; }
-    .cipher-input { width:36px; text-align:center; border:1px solid #000; font-size:1.2rem; height:32px; text-transform:uppercase; }
-    .space-block { width:20px; margin:0 3px; }
-    .controls { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:12px 0 14px 0; }
-    button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:pointer; font-weight:bold; }
-    .frequency-chart-container { background:#f8f8f8; padding:12px; margin-top:16px; height:260px; border:1px solid #000; }
-    .solution-container { background:#f8f8f8; padding:12px; margin-top:16px; display:none; border:1px solid #000; }
-    .solution-text { font-size:1.2rem; text-align:center; }
-    .author { text-align:right; font-style:italic; margin-top:8px; font-size:1rem; }
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Times New Roman', Times, serif; }
+body { background: #ffffff; color: #000000; min-height: 100vh; padding: 20px; display: flex; justify-content: center; }
+.container { max-width: 1000px; width: 100%; background: #ffffff; padding: 25px; border: 2px solid #000; }
+h1 { text-align: center; margin-bottom: 20px; font-size: 2rem; text-decoration: underline; }
+.game-info { display:flex; justify-content:space-between; margin-bottom:16px; gap:8px; flex-wrap:wrap; }
+.score, .timer { background:#f0f0f0; padding:10px 14px; font-weight:bold; border:1px solid #000; }
+.cipher-container { background:#f8f8f8; padding:18px; border:1px solid #000; }
+.cipher-row { display:flex; flex-wrap:wrap; justify-content:center; margin-bottom:8px; }
+.cipher-char-container { display:flex; flex-direction:column; align-items:center; margin:0 3px; }
+.cipher-char { width:36px; text-align:center; font-size:1.6rem; letter-spacing:2px; }
+.cipher-input { width:36px; text-align:center; border:1px solid #000; font-size:1.2rem; height:32px; text-transform:uppercase; }
+.space-block { width:20px; margin:0 3px; }
+.controls { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:12px 0 14px 0; }
+button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:pointer; font-weight:bold; }
+.frequency-chart-container { background:#f8f8f8; padding:12px; margin-top:16px; height:260px; border:1px solid #000; }
+.solution-container { background:#f8f8f8; padding:12px; margin-top:16px; display:none; border:1px solid #000; }
+.solution-text { font-size:1.2rem; text-align:center; }
+.author { text-align:right; font-style:italic; margin-top:8px; font-size:1rem; }
 </style>
 </head>
 <body>
-<div class="container" role="application">
+<div class="container">
+
     <h1>Aristocrat Cipher Game</h1>
 
     <div class="game-info">
@@ -51,232 +52,198 @@
         <div class="solution-text" id="solution-text"></div>
         <div class="author" id="author"></div>
     </div>
+
 </div>
 
 <script>
-/* =================== Wikiquote API =================== */
+// ===== Wikiquote API helper =====
 var WikiquoteApi = (function() {
-  var wqa = {};
-  var API_URL = "https://en.wikiquote.org/w/api.php";
+    var wqa = {};
+    var API_URL = "https://en.wikiquote.org/w/api.php";
 
-  wqa.getRandomQuote = function(title, success, error) {
-    $.ajax({
-      url: API_URL,
-      dataType: "jsonp",
-      data: { format: "json", action: "query", titles: title, redirects: "" },
-      success: function(res) {
-        var pages = res.query.pages;
-        var pageId = -1;
-        for (var p in pages) { if(!pages[p].missing){pageId=pages[p].pageid;break;} }
-        if(pageId < 0) return error("No page found");
-
-        // Get sections
+    wqa.queryTitles = function(titles, success, error) {
         $.ajax({
-          url: API_URL,
-          dataType: "jsonp",
-          data: { format:"json", action:"parse", prop:"sections", pageid:pageId },
-          success: function(secRes){
-            var secs = secRes.parse.sections.filter(s=>s.number.startsWith("1")).map(s=>s.index);
-            if(secs.length===0) secs=["1"];
-            var sec = secs[Math.floor(Math.random()*secs.length)];
-
-            // Get quotes
-            $.ajax({
-              url: API_URL,
-              dataType: "jsonp",
-              data:{ format:"json", action:"parse", pageid:pageId, section:sec, noimages:"" },
-              success: function(quoteRes){
-                var html = quoteRes.parse.text["*"];
-                var quotes = [];
-                $(html).find('li:not(li li)').each(function(){
-                  $(this).children().remove(':not(b)');
-                  var b = $(this).find('b');
-                  quotes.push(b.length>0? b.html(): $(this).text());
-                });
-                if(quotes.length===0) return error("No quotes found");
-                var quote = quotes[Math.floor(Math.random()*quotes.length)];
-                success({quote:quote, titles:title});
-              }, error: error
-            });
-          }, error: error
+            url: API_URL,
+            dataType: "jsonp",
+            data: { format:"json", action:"query", redirects:"", titles:titles },
+            success: function(result) {
+                var pages = result.query.pages;
+                for(var p in pages) {
+                    if(!("missing" in pages[p])) { success(pages[p].pageid); return; }
+                }
+                error("No results");
+            },
+            error: function() { error("Error processing your query"); }
         });
-      }, error: error
-    });
-  };
-  return wqa;
+    };
+
+    wqa.getSectionsForPage = function(pageId, success, error) {
+        $.ajax({
+            url: API_URL,
+            dataType:"jsonp",
+            data:{format:"json", action:"parse", prop:"sections", pageid:pageId},
+            success:function(result){
+                var secArr = [];
+                var sections = result.parse.sections;
+                for(var s in sections) {
+                    var splitNum = sections[s].number.split('.');
+                    if(splitNum.length>1 && splitNum[0]==="1") secArr.push(sections[s].index);
+                }
+                if(secArr.length===0) secArr.push("1");
+                success({titles:result.parse.title, sections:secArr});
+            },
+            error:function(){ error("Error getting sections"); }
+        });
+    };
+
+    wqa.getQuotesForSection = function(pageId, sectionIndex, success, error) {
+        $.ajax({
+            url:API_URL, dataType:"jsonp",
+            data:{format:"json", action:"parse", noimages:"", pageid:pageId, section:sectionIndex},
+            success:function(result){
+                var quotes = result.parse.text["*"];
+                var arr=[];
+                var $lis=$(quotes).find('li:not(li li)');
+                $lis.each(function(){
+                    $(this).children().remove(':not(b)');
+                    var $bolds=$(this).find('b');
+                    arr.push($bolds.length>0?$bolds.html():$(this).html());
+                });
+                success({titles:result.parse.title, quotes:arr});
+            },
+            error:function(){ error("Error getting quotes"); }
+        });
+    };
+
+    wqa.getRandomQuote=function(title, success, error){
+        wqa.queryTitles(title, function(pageId){
+            wqa.getSectionsForPage(pageId, function(sections){
+                var sec = sections.sections[Math.floor(Math.random()*sections.sections.length)];
+                wqa.getQuotesForSection(pageId, sec, function(res){
+                    var q = res.quotes[Math.floor(Math.random()*res.quotes.length)];
+                    success({titles:res.titles, quote:q});
+                }, error);
+            }, error);
+        }, error);
+    };
+
+    return wqa;
 }());
+</script>
 
-/* =================== Game State =================== */
-const game = {
-  score:0, time:0, timer:null,
-  solution:"", author:"",
-  cipherText:"", cipherAlphabet:"",
-  mapping:{}, chart:null
-};
+<script>
+// ===== Game state =====
+const game = { score:0, time:0, timer:null, solution:"", author:"", cipherText:"", cipherAlphabet:"", mapping:{}, chart:null };
+const lettersDiv=document.getElementById("cipher-letters");
+const scoreValue=document.getElementById("score-value");
+const timerValue=document.getElementById("timer-value");
+const solutionContainer=document.getElementById("solution-container");
+const solutionText=document.getElementById("solution-text");
+const authorText=document.getElementById("author");
 
-// DOM
-const lettersDiv = document.getElementById("cipher-letters");
-const scoreValue = document.getElementById("score-value");
-const timerValue = document.getElementById("timer-value");
-const solutionContainer = document.getElementById("solution-container");
-const solutionText = document.getElementById("solution-text");
-const authorText = document.getElementById("author");
-
-/* =================== Init =================== */
-window.onload = ()=>{
-  initChart();
-  loadNewQuote();
-};
-
-function initChart() {
-  game.chart = new Chart(document.getElementById("frequency-chart"), {
-    type:"bar",
-    data:{ labels:[], datasets:[{data:[]} ] },
-    options:{ responsive:true, maintainAspectRatio:false }
-  });
+// ===== Chart =====
+function initChart(){
+    game.chart=new Chart(document.getElementById("frequency-chart"), {
+        type:"bar", data:{labels:[], datasets:[{data:[]}]}, options:{responsive:true, maintainAspectRatio:false}
+    });
 }
-
-/* =================== Load Quote =================== */
-function loadNewQuote() {
-  const randomAuthors = ["Socrates","Mahatma Gandhi","Albert Einstein","Aristotle","Plato","Confucius"];
-  const author = randomAuthors[Math.floor(Math.random()*randomAuthors.length)];
-
-  WikiquoteApi.getRandomQuote(author,
-    function(res){
-      if(!res.quote) return useFallback();
-      game.solution = res.quote.toUpperCase().replace(/[^A-Z ]/g,'');
-      game.author = res.titles;
-      startGame();
-    },
-    function(err){
-      console.warn("Wikiquote failed:",err);
-      useFallback();
-    }
-  );
-}
-
-function useFallback() {
-  const quotes = [
-    {q:"THE ONLY TRUE WISDOM IS IN KNOWING YOU KNOW NOTHING", a:"SOCRATES"},
-    {q:"BE THE CHANGE THAT YOU WISH TO SEE IN THE WORLD", a:"MAHATMA GANDHI"},
-    {q:"IMAGINATION IS MORE IMPORTANT THAN KNOWLEDGE", a:"ALBERT EINSTEIN"}
-  ];
-  const pick = quotes[Math.floor(Math.random()*quotes.length)];
-  game.solution = pick.q.toUpperCase().replace(/[^A-Z ]/g,'');
-  game.author = pick.a;
-  startGame();
-}
-
-function startGame() {
-  generateCipher();
-  renderCipher();
-  resetTimer();
-  solutionContainer.style.display="none";
-}
-
-/* =================== Cipher =================== */
-function generateCipher() {
-  const alph = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const shuffled = [...alph].sort(()=>Math.random()-0.5);
-  game.cipherAlphabet = shuffled.join("");
-
-  const plainToCipher = {};
-  alph.forEach((l,i)=>plainToCipher[l]=shuffled[i]);
-
-  game.cipherText = [...game.solution].map(ch=>ch===" "? " ": plainToCipher[ch]).join("");
-  game.mapping = {};
-  shuffled.forEach(c=>game.mapping[c]="");
-}
-
-/* =================== Render =================== */
-function renderCipher() {
-  lettersDiv.innerHTML = "";
-  [...game.cipherText].forEach((ch,i)=>{
-    if(ch===" "){
-      const sp = document.createElement("div");
-      sp.className="space-block";
-      lettersDiv.appendChild(sp);
-      return;
-    }
-    const container = document.createElement("div");
-    container.className="cipher-char-container";
-
-    const letterDiv = document.createElement("div");
-    letterDiv.className="cipher-char";
-    letterDiv.textContent = ch;
-
-    const input = document.createElement("input");
-    input.className="cipher-input";
-    input.maxLength=1;
-    input.dataset.i=i;
-    input.addEventListener("input", handleInput);
-
-    container.appendChild(letterDiv);
-    container.appendChild(input);
-    lettersDiv.appendChild(container);
-  });
-  updateChart();
-}
-
-/* =================== Input =================== */
-function handleInput(e){
-  const box=e.target;
-  const i=parseInt(box.dataset.i);
-  const cipherLetter = game.cipherText[i];
-  const val = box.value.toUpperCase().replace(/[^A-Z]/g,"");
-  game.mapping[cipherLetter] = val;
-  updateAllMatching(cipherLetter);
-  checkSolved();
-}
-
-function updateAllMatching(c){
-  const val = game.mapping[c];
-  document.querySelectorAll(".cipher-input").forEach(box=>{
-    if(game.cipherText[box.dataset.i]==c) box.value=val;
-  });
-}
-
-/* =================== Check Solve =================== */
-function checkSolved(){
-  for(let i=0;i<game.solution.length;i++){
-    if(game.solution[i]===" ") continue;
-    if(game.mapping[game.cipherText[i]]!==game.solution[i]) return;
-  }
-  clearInterval(game.timer);
-  game.score+=50;
-  scoreValue.textContent = game.score;
-  solutionText.textContent = `"${game.solution}" – solved in ${formatTime(game.time)}`;
-  authorText.textContent = `– ${game.author}`;
-  solutionContainer.style.display="block";
-}
-
-/* =================== Timer =================== */
-function resetTimer(){
-  clearInterval(game.timer);
-  game.time=0;
-  timerValue.textContent="00:00";
-  game.timer=setInterval(()=>{
-    game.time++;
-    timerValue.textContent=formatTime(game.time);
-  },1000);
-}
-
-function formatTime(t){
-  return `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`;
-}
-
-/* =================== Chart =================== */
 function updateChart(){
-  const freq = {};
-  for(const ch of game.cipherText) if(ch!==" ") freq[ch]=(freq[ch]||0)+1;
-  const arr = Object.entries(freq).sort((a,b)=>b[1]-a[1]);
-  game.chart.data.labels=arr.map(e=>e[0]);
-  game.chart.data.datasets[0].data=arr.map(e=>e[1]);
-  game.chart.update();
+    const freq={};
+    for(const ch of game.cipherText) if(ch!==" ") freq[ch]=(freq[ch]||0)+1;
+    const arr=Object.entries(freq).sort((a,b)=>b[1]-a[1]);
+    game.chart.data.labels=arr.map(e=>e[0]);
+    game.chart.data.datasets[0].data=arr.map(e=>e[1]);
+    game.chart.update();
 }
 
-/* =================== Button =================== */
-document.getElementById("new-quote-btn").onclick = loadNewQuote;
+// ===== Cipher =====
+function generateCipher(){
+    game.solution=game.solution.toUpperCase().replace(/[^A-Z ]/g,'');
+    const alph="ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    const shuffled=[...alph].sort(()=>Math.random()-0.5);
+    game.cipherAlphabet=shuffled.join("");
+    const map={}; for(let i=0;i<alph.length;i++) map[alph[i]]=shuffled[i];
+    game.cipherText=[...game.solution].map(ch=>ch===" "? " ": map[ch]).join("");
+    game.mapping={}; for(const c of shuffled) game.mapping[c]="";
+}
+
+function renderCipher(){
+    lettersDiv.innerHTML="";
+    [...game.cipherText].forEach((ch,i)=>{
+        if(ch===" "){ lettersDiv.innerHTML+="<div class='space-block'></div>"; return; }
+        const container=document.createElement("div");
+        container.className="cipher-char-container";
+        const letterDiv=document.createElement("div");
+        letterDiv.className="cipher-char"; letterDiv.textContent=ch;
+        const input=document.createElement("input");
+        input.className="cipher-input"; input.maxLength=1; input.dataset.i=i;
+        input.addEventListener("input", handleInput);
+        container.appendChild(letterDiv); container.appendChild(input);
+        lettersDiv.appendChild(container);
+    });
+    updateChart();
+}
+
+function handleInput(e){
+    const box=e.target, i=parseInt(box.dataset.i), cipherLetter=game.cipherText[i];
+    const val=box.value.toUpperCase().replace(/[^A-Z]/g,'');
+    game.mapping[cipherLetter]=val;
+    document.querySelectorAll(".cipher-input").forEach(b=>{
+        if(game.cipherText[b.dataset.i]==cipherLetter) b.value=val;
+    });
+    checkSolved();
+}
+
+function checkSolved(){
+    for(let i=0;i<game.solution.length;i++){
+        const plain=game.solution[i];
+        if(plain==="") continue;
+        if(game.mapping[game.cipherText[i]]!==plain) return false;
+    }
+    clearInterval(game.timer);
+    game.score+=50; scoreValue.textContent=game.score;
+    solutionText.textContent=`"${game.solution}" – solved in ${formatTime(game.time)}`;
+    authorText.textContent=`– ${game.author}`;
+    solutionContainer.style.display="block";
+}
+
+function resetTimer(){
+    clearInterval(game.timer); game.time=0; timerValue.textContent="00:00";
+    game.timer=setInterval(()=>{game.time++; timerValue.textContent=formatTime(game.time);},1000);
+}
+function formatTime(t){return `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`;}
+
+// ===== Quote fetch =====
+function loadNewQuote(){
+    const authors=["Socrates","Mahatma Gandhi","Albert Einstein","Aristotle","Confucius"];
+    const author=authors[Math.floor(Math.random()*authors.length)];
+    WikiquoteApi.getRandomQuote(author, function(result){
+        game.solution=result.quote.toUpperCase().replace(/[^A-Z ]/g,'');
+        game.author=result.titles;
+        generateCipher();
+        renderCipher();
+        resetTimer();
+        solutionContainer.style.display="none";
+    }, function(err){
+        // fallback
+        const fallbackQuotes=[
+            "THE ONLY TRUE WISDOM IS IN KNOWING YOU KNOW NOTHING",
+            "BE THE CHANGE THAT YOU WISH TO SEE IN THE WORLD"
+        ];
+        const fallbackAuthors=["SOCRATES","MAHATMA GANDHI"];
+        const i=Math.floor(Math.random()*fallbackQuotes.length);
+        game.solution=fallbackQuotes[i]; game.author=fallbackAuthors[i];
+        generateCipher(); renderCipher(); resetTimer(); solutionContainer.style.display="none";
+    });
+}
+
+// ===== Init =====
+window.onload=()=>{
+    initChart();
+    loadNewQuote();
+};
+document.getElementById("new-quote-btn").onclick=loadNewQuote;
+
 </script>
 </body>
 </html>
