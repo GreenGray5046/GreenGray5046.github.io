@@ -7,10 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Times New Roman', Times, serif; }
-body { background: #ffffff; color: #000000; min-height: 100vh; padding: 20px; display: flex; justify-content: center; }
-.container { max-width: 1000px; width: 100%; background: #ffffff; padding: 25px; border: 2px solid #000; }
-h1 { text-align: center; margin-bottom: 20px; font-size: 2rem; text-decoration: underline; }
+* { margin:0; padding:0; box-sizing:border-box; font-family:'Times New Roman', Times, serif; }
+body { background:#fff; color:#000; min-height:100vh; padding:20px; display:flex; justify-content:center; }
+.container { max-width:1000px; width:100%; background:#fff; padding:25px; border:2px solid #000; }
+h1 { text-align:center; margin-bottom:20px; font-size:2rem; text-decoration:underline; }
 .game-info { display:flex; justify-content:space-between; margin-bottom:16px; gap:8px; flex-wrap:wrap; }
 .score, .timer { background:#f0f0f0; padding:10px 14px; font-weight:bold; border:1px solid #000; }
 .cipher-container { background:#f8f8f8; padding:18px; border:1px solid #000; }
@@ -129,9 +129,7 @@ var WikiquoteApi = (function() {
 
     return wqa;
 }());
-</script>
 
-<script>
 // ===== Game state =====
 const game = { score:0, time:0, timer:null, solution:"", author:"", cipherText:"", cipherAlphabet:"", mapping:{}, chart:null };
 const lettersDiv=document.getElementById("cipher-letters");
@@ -144,7 +142,8 @@ const authorText=document.getElementById("author");
 // ===== Chart =====
 function initChart(){
     game.chart=new Chart(document.getElementById("frequency-chart"), {
-        type:"bar", data:{labels:[], datasets:[{data:[]}]}, options:{responsive:true, maintainAspectRatio:false}
+        type:"bar", data:{labels:[], datasets:[{data:[], backgroundColor:'rgba(0,0,0,0.5)'}]}, 
+        options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}
     });
 }
 function updateChart(){
@@ -167,6 +166,7 @@ function generateCipher(){
     game.mapping={}; for(const c of shuffled) game.mapping[c]="";
 }
 
+// ===== Render cipher =====
 function renderCipher(){
     lettersDiv.innerHTML="";
     [...game.cipherText].forEach((ch,i)=>{
@@ -178,27 +178,78 @@ function renderCipher(){
         const input=document.createElement("input");
         input.className="cipher-input"; input.maxLength=1; input.dataset.i=i;
         input.addEventListener("input", handleInput);
+        input.addEventListener("keydown", handleNavigation);
         container.appendChild(letterDiv); container.appendChild(input);
         lettersDiv.appendChild(container);
     });
     updateChart();
+    focusFirstBox();
 }
 
+// ===== Input handlers =====
 function handleInput(e){
-    const box=e.target, i=parseInt(box.dataset.i), cipherLetter=game.cipherText[i];
-    const val=box.value.toUpperCase().replace(/[^A-Z]/g,'');
-    game.mapping[cipherLetter]=val;
+    const box = e.target;
+    const i = parseInt(box.dataset.i);
+    const cipherLetter = game.cipherText[i];
+    const val = box.value.toUpperCase().replace(/[^A-Z]/g,'');
+
+    // Update mapping
+    if(val) { game.mapping[cipherLetter] = val; }
+    else { game.mapping[cipherLetter] = ""; }
+
+    // Autofill all matching letters
     document.querySelectorAll(".cipher-input").forEach(b=>{
-        if(game.cipherText[b.dataset.i]==cipherLetter) b.value=val;
+        if(game.cipherText[b.dataset.i]==cipherLetter){
+            b.value = val;
+        }
     });
+
+    // Auto-jump to next
+    if(val) moveFocusNext(i);
+
     checkSolved();
 }
 
+// ===== Navigation =====
+function handleNavigation(e){
+    const i = parseInt(e.target.dataset.i);
+    switch(e.key){
+        case "ArrowRight": e.preventDefault(); moveFocusNext(i); break;
+        case "ArrowLeft": e.preventDefault(); moveFocusPrev(i); break;
+        case "ArrowUp": e.preventDefault(); moveFocusUp(i); break;
+        case "ArrowDown": e.preventDefault(); moveFocusDown(i); break;
+        case "Backspace":
+            if(!e.target.value) moveFocusPrev(i); break;
+    }
+}
+
+function moveFocusNext(i){
+    const boxes = Array.from(document.querySelectorAll(".cipher-input"));
+    for(let j=i+1;j<boxes.length;j++){ if(!boxes[j].parentElement.classList.contains('space-block')) { boxes[j].focus(); break; } }
+}
+function moveFocusPrev(i){
+    const boxes = Array.from(document.querySelectorAll(".cipher-input"));
+    for(let j=i-1;j>=0;j--){ if(!boxes[j].parentElement.classList.contains('space-block')) { boxes[j].focus(); break; } }
+}
+function moveFocusUp(i){ moveVertical(i,-1); }
+function moveFocusDown(i){ moveVertical(i,1); }
+function moveVertical(i,dir){
+    const boxes = Array.from(document.querySelectorAll(".cipher-input"));
+    const perRow = Math.max(Math.floor(lettersDiv.offsetWidth/40),1);
+    let target = i + dir*perRow;
+    if(target<0) target=0;
+    if(target>=boxes.length) target=boxes.length-1;
+    boxes[target].focus();
+}
+
+// ===== Focus first box =====
+function focusFirstBox(){ const first=document.querySelector(".cipher-input"); if(first) first.focus(); }
+
+// ===== Check solved =====
 function checkSolved(){
     for(let i=0;i<game.solution.length;i++){
-        const plain=game.solution[i];
-        if(plain==="") continue;
-        if(game.mapping[game.cipherText[i]]!==plain) return false;
+        if(game.solution[i]===" ") continue;
+        if(game.mapping[game.cipherText[i]]!==game.solution[i]) return false;
     }
     clearInterval(game.timer);
     game.score+=50; scoreValue.textContent=game.score;
@@ -207,29 +258,23 @@ function checkSolved(){
     solutionContainer.style.display="block";
 }
 
+// ===== Timer =====
 function resetTimer(){
     clearInterval(game.timer); game.time=0; timerValue.textContent="00:00";
     game.timer=setInterval(()=>{game.time++; timerValue.textContent=formatTime(game.time);},1000);
 }
-function formatTime(t){return `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`;}
+function formatTime(t){ return `${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`; }
 
-// ===== Quote fetch =====
+// ===== Load quote =====
 function loadNewQuote(){
     const authors=["Socrates","Mahatma Gandhi","Albert Einstein","Aristotle","Confucius"];
     const author=authors[Math.floor(Math.random()*authors.length)];
     WikiquoteApi.getRandomQuote(author, function(result){
         game.solution=result.quote.toUpperCase().replace(/[^A-Z ]/g,'');
         game.author=result.titles;
-        generateCipher();
-        renderCipher();
-        resetTimer();
-        solutionContainer.style.display="none";
+        generateCipher(); renderCipher(); resetTimer(); solutionContainer.style.display="none";
     }, function(err){
-        // fallback
-        const fallbackQuotes=[
-            "THE ONLY TRUE WISDOM IS IN KNOWING YOU KNOW NOTHING",
-            "BE THE CHANGE THAT YOU WISH TO SEE IN THE WORLD"
-        ];
+        const fallbackQuotes=["THE ONLY TRUE WISDOM IS IN KNOWING YOU KNOW NOTHING","BE THE CHANGE THAT YOU WISH TO SEE IN THE WORLD"];
         const fallbackAuthors=["SOCRATES","MAHATMA GANDHI"];
         const i=Math.floor(Math.random()*fallbackQuotes.length);
         game.solution=fallbackQuotes[i]; game.author=fallbackAuthors[i];
@@ -243,7 +288,6 @@ window.onload=()=>{
     loadNewQuote();
 };
 document.getElementById("new-quote-btn").onclick=loadNewQuote;
-
 </script>
 </body>
 </html>
