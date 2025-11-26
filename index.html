@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Aristocrat Cipher Game (Improved)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Times New Roman', Times, serif; }
+        body { background: #ffffff; color: #000000; min-height: 100vh; padding: 20px; display: flex; justify-content: center; }
+        .container { max-width: 1000px; width: 100%; background: #ffffff; padding: 25px; border: 2px solid #000; }
+        h1 { text-align: center; margin-bottom: 20px; font-size: 2rem; text-decoration: underline; }
+        .game-info { display:flex; justify-content:space-between; margin-bottom:16px; gap:8px; flex-wrap:wrap; }
+        .score, .timer { background:#f0f0f0; padding:10px 14px; font-weight:bold; border:1px solid #000; }
+        .cipher-container { background:#f8f8f8; padding:18px; border:1px solid #000; }
+        .cipher-row { display:flex; flex-wrap:wrap; justify-content:center; margin-bottom:8px; }
+        .cipher-char {
+            width:36px; 
+            text-align:center;
+            margin:0 3px;
+            font-size:1.6rem;
+            letter-spacing:2px;
+        }
+        .cipher-input {
+            width:36px;
+            text-align:center;
+            border:1px solid #000;
+            font-size:1.2rem;
+            height:32px;
+            margin:0 3px;
+            text-transform:uppercase;
+        }
+        .space-block {
+            width:20px;
+            margin:0 3px;
+        }
+        .controls { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:12px 0 14px 0; }
+        button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:pointer; font-weight:bold; }
+        .frequency-chart-container { background:#f8f8f8; padding:12px; margin-top:16px; height:260px; border:1px solid #000; }
+        .solution-container { background:#f8f8f8; padding:12px; margin-top:16px; display:none; border:1px solid #000; }
+        .solution-text { font-size:1.2rem; text-align:center; }
+        .author { text-align:right; font-style:italic; margin-top:8px; font-size:1rem; }
+        .instructions { margin-top:16px; padding:12px; background:#f0f0f0; border:1px solid #000; }
+    </style>
+</head>
+<body>
+    <div class="container" role="application">
+
+        <h1>Aristocrat Cipher Game</h1>
+
+        <div class="game-info">
+            <div class="score">Score: <span id="score-value">0</span></div>
+            <div class="timer">Time: <span id="timer-value">00:00</span></div>
+        </div>
+
+        <div class="cipher-container">
+            <div class="cipher-row" id="cipher-letters"></div>
+            <div class="cipher-row" id="cipher-inputs"></div>
+
+            <div class="controls">
+                <button id="new-quote-btn">New Quote</button>
+            </div>
+        </div>
+
+        <div class="frequency-chart-container">
+            <canvas id="frequency-chart"></canvas>
+        </div>
+
+        <div class="solution-container" id="solution-container">
+            <div class="solution-text" id="solution-text"></div>
+            <div class="author" id="author"></div>
+        </div>
+
+    </div>
+
+<script>
+// == Game state ==
+const game = {
+    score: 0,
+    time: 0,
+    timer: null,
+    solution: "",
+    author: "",
+    cipherText: "",
+    cipherAlphabet: "",
+    mapping: {},
+    selectedIndex: 0,
+    chart: null
+};
+
+// DOM
+const lettersDiv = document.getElementById("cipher-letters");
+const inputsDiv = document.getElementById("cipher-inputs");
+const scoreValue = document.getElementById("score-value");
+const timerValue = document.getElementById("timer-value");
+const solutionContainer = document.getElementById("solution-container");
+const solutionText = document.getElementById("solution-text");
+const authorText = document.getElementById("author");
+
+// Init
+window.onload = () => {
+    initChart();
+    loadNewQuote();
+};
+
+// ===== Chart =====
+function initChart() {
+    game.chart = new Chart(document.getElementById("frequency-chart"), {
+        type: "bar",
+        data: { labels: [], datasets: [{ data: [] }] },
+        options: { responsive:true, maintainAspectRatio:false }
+    });
+}
+function updateChart() {
+    const freq = {};
+    for (const ch of game.cipherText) if (ch !== " ") freq[ch] = (freq[ch] || 0) + 1;
+
+    const arr = Object.entries(freq).sort((a,b)=>b[1]-a[1]);
+    game.chart.data.labels = arr.map(e=>e[0]);
+    game.chart.data.datasets[0].data = arr.map(e=>e[1]);
+    game.chart.update();
+}
+
+// ===== Quote =====
+function loadNewQuote() {
+    useFallback();
+
+    generateCipher();
+    renderCipher();
+    resetTimer();
+    solutionContainer.style.display = "none";
+}
+function useFallback() {
+    const q = [
+        "THE ONLY TRUE WISDOM IS IN KNOWING YOU KNOW NOTHING",
+        "BE THE CHANGE THAT YOU WISH TO SEE IN THE WORLD"
+    ];
+    const a = ["SOCRATES","MAHATMA GANDHI"];
+    const i = Math.floor(Math.random()*q.length);
+    game.solution = q[i];
+    game.author = a[i];
+}
+
+// ===== Cipher generation =====
+function generateCipher() {
+    const alph = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    const shuffled = [...alph].sort(()=>Math.random()-0.5);
+    game.cipherAlphabet = shuffled.join("");
+
+    const plainToCipher = {};
+    for (let i=0;i<alph.length;i++) plainToCipher[alph[i]]=shuffled[i];
+
+    game.cipherText = [...game.solution].map(ch => ch===" "? " ": plainToCipher[ch]).join("");
+    game.mapping = {};
+    for (const c of shuffled) game.mapping[c] = "";
+    game.selectedIndex = 0;
+}
+
+// ===== Rendering =====
+function renderCipher() {
+    lettersDiv.innerHTML = "";
+
+    [...game.cipherText].forEach((ch,i) => {
+        if (ch === " ") {
+            const spaceDiv = document.createElement("div");
+            spaceDiv.className = "space-block";
+            lettersDiv.appendChild(spaceDiv);
+            return;
+        }
+
+        const container = document.createElement("div");
+        container.className = "cipher-char-container";
+
+        const letterDiv = document.createElement("div");
+        letterDiv.className = "cipher-char";
+        letterDiv.textContent = ch;
+
+        const input = document.createElement("input");
+        input.className = "cipher-input";
+        input.maxLength = 1;
+        input.dataset.i = i;
+
+        container.appendChild(letterDiv);
+        container.appendChild(input);
+        lettersDiv.appendChild(container);
+    });
+
+    document.querySelectorAll(".cipher-input").forEach(input => {
+    input.addEventListener("input", handleInput);
+
+    input.addEventListener("keydown", (e) => {
+        const inputs = Array.from(document.querySelectorAll(".cipher-input"));
+        const i = parseInt(input.dataset.i);
+
+        switch(e.key) {
+            case "ArrowRight":
+                focusNextInput(i, inputs);
+                e.preventDefault();
+                break;
+            case "ArrowLeft":
+                focusPrevInput(i, inputs);
+                e.preventDefault();
+                break;
+            case "ArrowDown":
+            case "ArrowUp":
+                {
+                    // For stacked layout, up/down same as left/right
+                    if(e.key === "ArrowDown") focusNextInput(i, inputs);
+                    else focusPrevInput(i, inputs);
+                    e.preventDefault();
+                }
+                break;
+            case "Backspace":
+                if(!input.value) { // jump to previous if empty
+                    focusPrevInput(i, inputs);
+                    e.preventDefault();
+                }
+                break;
+        }
+    });
+});
+
+    updateChart();
+}
+
+// ===== Input handling =====
+function handleInput(e) {
+    const box = e.target;
+    const i = parseInt(box.dataset.i);
+    const cipherLetter = game.cipherText[i];
+
+    // Only uppercase letters
+    const val = box.value.toUpperCase().replace(/[^A-Z]/g, "");
+
+    // Update mapping
+    game.mapping[cipherLetter] = val;
+
+    // Update all matching boxes (including this one)
+    updateAllMatching(cipherLetter);
+
+    // Check if solved
+    checkSolved();
+
+    // Auto-jump to next box
+    if (val) {
+        const inputs = Array.from(document.querySelectorAll(".cipher-input"));
+        focusNextInput(i, inputs);
+    }
+}
+
+
+function focusNextInput(i, inputs) {
+    const next = inputs.find(inp => parseInt(inp.dataset.i) > i);
+    if(next) next.focus();
+}
+
+function focusPrevInput(i, inputs) {
+    let prev;
+    for(let j = inputs.length - 1; j >= 0; j--) {
+        if(parseInt(inputs[j].dataset.i) < i) {
+            prev = inputs[j];
+            break;
+        }
+    }
+    if(prev) prev.focus();
+}
+function updateAllMatching(cipherLetter) {
+    const val = game.mapping[cipherLetter];
+    document.querySelectorAll(".cipher-input").forEach(box => {
+        const i = parseInt(box.dataset.i);
+        if (game.cipherText[i] === cipherLetter) {
+            box.value = val; // always replace current value
+        }
+    });
+}
+
+function checkSolved() {
+    for (let i=0;i<game.solution.length;i++) {
+        const plain = game.solution[i];
+        if (plain === " ") continue;
+
+        const cipher = game.cipherText[i];
+        if (game.mapping[cipher] !== plain) return false;
+    }
+    clearInterval(game.timer);
+    game.score += 50;
+    scoreValue.textContent = game.score;
+
+    solutionText.textContent = `"${game.solution}" – solved in ${formatTime(game.time)}`;
+    authorText.textContent = `– ${game.author}`;
+    solutionContainer.style.display = "block";
+}
+
+// ===== Timer =====
+function resetTimer() {
+    clearInterval(game.timer);
+    game.time = 0;
+    timerValue.textContent = "00:00";
+    game.timer = setInterval(()=>{
+        game.time++;
+        timerValue.textContent = formatTime(game.time);
+    },1000);
+}
+function formatTime(t) {
+    const m = String(Math.floor(t/60)).padStart(2,"0");
+    const s = String(t%60).padStart(2,"0");
+    return `${m}:${s}`;
+}
+
+// ===== Buttons =====
+
+
+document.getElementById("new-quote-btn").onclick = loadNewQuote;
+
+</script>
+
+</body>
+</html>
