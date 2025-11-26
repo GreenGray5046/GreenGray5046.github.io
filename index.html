@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aristocrat Cipher Game</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <style>
@@ -121,7 +122,7 @@ var WikiquoteApi = (function() {
     wqa.getRandomQuote = function(author, success, error) {
         var fallbackError = function(msg){ error(msg); };
         var chooseQuote = function(quotes){
-            var filtered = quotes.quotes.filter(q=>q.length<=80);
+            var filtered = quotes.quotes.filter(q=>q.length<=20);
             if(filtered.length===0){ fallbackError("All quotes too long"); return; }
             var q = filtered[Math.floor(Math.random()*filtered.length)];
             success({quote:q, titles:quotes.titles});
