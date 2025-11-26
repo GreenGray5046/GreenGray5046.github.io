@@ -48,7 +48,7 @@ button { background:#f0f0f0; border:1px solid #000; padding:10px 16px; cursor:po
     </div>
 
     <div class="instructions">
-        <p><strong>Navigation:</strong> Use Tab/Shift+Tab to move between inputs, or click directly on any input box. Arrow keys also work for navigation.</p>
+        <p><strong>Navigation:</strong> Use Arrow Keys to move between inputs. Auto-advance after entering a letter, auto-return after deleting.</p>
     </div>
 
     <div class="frequency-chart-container">
@@ -292,7 +292,20 @@ function handleKeydown(e) {
         moveToPrevInput();
     } else if (key === 'Backspace' && input.value === '') {
         e.preventDefault();
+        // Auto-return after deleting
         moveToPrevInput();
+        // Clear the previous input
+        if (game.currentInputIndex >= 0) {
+            const prevInput = game.inputs[game.currentInputIndex];
+            const cipherLetter = prevInput.dataset.cipherChar;
+            game.mapping[cipherLetter] = "";
+            prevInput.value = "";
+            
+            // Update all inputs for this cipher letter
+            document.querySelectorAll(".cipher-input").forEach(b=>{
+                if(game.cipherText[b.dataset.i]==cipherLetter) b.value="";
+            });
+        }
     }
 }
 
@@ -320,7 +333,7 @@ function handleInput(e){
         if(game.cipherText[b.dataset.i]==cipherLetter) b.value=val;
     });
     
-    // Auto-advance to next input
+    // Auto-advance to next input after filling
     if (val !== '' && game.currentInputIndex < game.inputs.length - 1) {
         moveToNextInput();
     }
@@ -392,11 +405,10 @@ window.onload=()=>{
 document.getElementById("new-quote-btn").onclick=loadNewQuote;
 document.getElementById("clear-btn").onclick=clearAllInputs;
 
-// Add keyboard event listener for global navigation
+// Disable Tab navigation
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Tab') {
-        // Let the browser handle Tab navigation naturally
-        // We'll update the currentInputIndex in the focus handler
+        e.preventDefault();
     }
 });
 </script>
