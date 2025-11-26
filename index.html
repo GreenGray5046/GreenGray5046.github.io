@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Aristocrat Cipher Game (Improved)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Times New Roman', Times, serif; }
         body { background: #ffffff; color: #000000; min-height: 100vh; padding: 20px; display: flex; justify-content: center; }
@@ -123,13 +124,31 @@ function updateChart() {
 
 // ===== Quote =====
 function loadNewQuote() {
-    useFallback();
+    // Try to fetch a Wikiquote quote first
+    const randomAuthors = ["Socrates", "Mahatma Gandhi", "Albert Einstein", "Aristotle"];
+    const author = randomAuthors[Math.floor(Math.random()*randomAuthors.length)];
 
-    generateCipher();
-    renderCipher();
-    resetTimer();
-    solutionContainer.style.display = "none";
+    WikiquoteApi.getRandomQuote(author, 
+        function(result) {
+            // Success
+            game.solution = result.quote.toUpperCase().replace(/[^A-Z ]/g,'');
+            game.author = result.titles;
+            generateCipher();
+            renderCipher();
+            resetTimer();
+            solutionContainer.style.display = "none";
+        }, 
+        function(err) {
+            console.warn("Wikiquote failed, using fallback:", err);
+            useFallback(); // your fallback function
+            generateCipher();
+            renderCipher();
+            resetTimer();
+            solutionContainer.style.display = "none";
+        }
+    );
 }
+
 function useFallback() {
     const q = [
         "THE ONLY TRUE WISDOM IS IN KNOWING YOU KNOW NOTHING",
@@ -143,6 +162,9 @@ function useFallback() {
 
 // ===== Cipher generation =====
 function generateCipher() {
+    
+    game.solution = game.solution.toUpperCase().replace(/[^A-Z ]/g,'');
+
     const alph = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
     const shuffled = [...alph].sort(()=>Math.random()-0.5);
     game.cipherAlphabet = shuffled.join("");
